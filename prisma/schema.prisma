@@ -1,0 +1,162 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  name         String?
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  subjects     Subject[]
+  sessions     Session[]
+  topics       Topic[]
+  topicProgress TopicProgress[]
+  studySessions StudySession[] @relation("UserStudySessions")
+  studyBreaks  StudyBreak[] @relation("UserStudyBreaks")
+  uploadedFiles UploadedFile[]
+
+  @@index([email])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Subject {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  topics       Topic[]
+  studySessions StudySession[] @relation("SubjectStudySessions")
+
+  @@index([userId])
+}
+
+model Topic {
+  id          String   @id @default(uuid())
+  userId      String
+  subjectId   String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  topicProgress TopicProgress[]
+  studySessions StudySession[]
+  questions     PracticeQuestion[] @relation("TopicQuestions")
+
+  @@index([userId])
+  @@index([subjectId])
+}
+
+model TopicProgress {
+  id        String   @id @default(uuid())
+  topicId   String
+  topic     Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  progress  Int      @default(0) // 0-100
+  status    String   @default("not_started") // not_started, learning, reviewed, mastered
+  updatedAt DateTime @updatedAt
+
+  @@unique([topicId, userId])
+  @@index([userId])
+  @@index([topicId])
+}
+
+model StudySession {
+  id             String       @id @default(uuid())
+  userId         String
+  topicId        String?
+  subjectId      String?
+  user           User         @relation("UserStudySessions", fields: [userId], references: [id], onDelete: Cascade)
+  topic          Topic?       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  subject        Subject?     @relation("SubjectStudySessions", fields: [subjectId], references: [id], onDelete: Cascade)
+  startTime      DateTime
+  endTime        DateTime?
+  duration       Int          // minutes
+  totalFocusTime Int          // minutes (excluding breaks)
+  totalBreakTime Int          // minutes
+  breaksCount    Int
+  notes          String?
+  createdAt      DateTime     @default(now())
+
+  studyBreaks StudyBreak[] @relation("SessionStudyBreaks")
+
+  @@index([userId])
+  @@index([topicId])
+  @@index([subjectId])
+}
+
+model StudyBreak {
+  id                String       @id @default(uuid())
+  studySessionId    String
+  studySession      StudySession @relation("SessionStudyBreaks", fields: [studySessionId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User         @relation("UserStudyBreaks", fields: [userId], references: [id], onDelete: Cascade)
+  startTime         DateTime
+  endTime           DateTime?
+  duration          Int          // minutes
+  breakType         String       // short | long | custom
+  createdAt         DateTime     @default(now())
+
+  @@index([studySessionId])
+  @@index([userId])
+}
+
+model UploadedFile {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fileName      String
+  fileUrl       String
+  fileType      String
+  fileSize      Int
+  processed     Boolean  @default(false)
+  extractedText String?
+  aiAnalysis    Json?
+  createdAt     DateTime @default(now())
+
+  @@index([userId])
+}
+
+model PracticeQuestion {
+  id          String   @id @default(uuid())
+  subject     String
+  topicId     String?
+  topic       Topic?   @relation("TopicQuestions", fields: [topicId], references: [id], onDelete: SetNull)
+  question    String
+  options     Json     // Store as JSON array for SQLite compatibility
+  correct     Int
+  difficulty  String
+  createdAt   DateTime @default(now())
+
+  @@index([subject])
+  @@index([topicId])
+}
